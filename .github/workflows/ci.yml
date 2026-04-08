@@ -246,7 +246,6 @@ jobs:
         path: artifacts
 
   windows:
-    needs: lint
     runs-on: windows-latest-8-cores
     timeout-minutes: 30
 
