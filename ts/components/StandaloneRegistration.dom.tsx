@@ -495,7 +495,7 @@ function ProfileNameStage({
         <button
           type="button"
           className="button"
-          disabled={!normalizeProfileName(firstName) || !avatarData}
+          disabled={!normalizeProfileName(firstName)}
           onClick={onNextClick}
         >
           Finish

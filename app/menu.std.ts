@@ -232,12 +232,10 @@ export const createTemplate = (
         });
       }
 
-      if (options.development) {
-        fileMenu.submenu.unshift({
-          label: i18n('icu:menuSetupAsStandalone'),
-          click: setupAsStandalone,
-        });
-      }
+      fileMenu.submenu.unshift({
+        label: i18n('icu:menuSetupAsStandalone'),
+        click: setupAsStandalone,
+      });
 
       fileMenu.submenu.unshift({
         type: 'separator',
