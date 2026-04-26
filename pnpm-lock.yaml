@@ -100,6 +100,9 @@ importers:
       google-libphonenumber:
         specifier: 3.2.39
         version: 3.2.39
+      intl-tel-input:
+        specifier: 24.7.0
+        version: 24.7.0
     devDependencies:
       '@babel/core':
         specifier: 7.29.0
@@ -557,9 +560,6 @@ importers:
       humanize-duration:
         specifier: 3.27.1
         version: 3.27.1
-      intl-tel-input:
-        specifier: 24.7.0
-        version: 24.7.0
       is-glob:
         specifier: 4.0.3
         version: 4.0.3
@@ -4897,6 +4897,7 @@ packages:
   '@xmldom/xmldom@0.8.10':
     resolution: {integrity: sha512-2WALfTl4xo2SkGCYRt6rDTFfk9R1czmBvUQy12gK2KuRKIpWEhcbbzy8EZXtz/jkRqHX8bFEc6FC1HjX4TUWYw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}

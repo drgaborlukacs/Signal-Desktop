@@ -122,7 +122,8 @@
     "@signalapp/sqlcipher": "3.2.1",
     "@signalapp/windows-ucv": "1.0.1",
     "emoji-datasource": "16.0.0",
-    "google-libphonenumber": "3.2.39"
+    "google-libphonenumber": "3.2.39",
+    "intl-tel-input": "24.7.0"
   },
   "devDependencies": {
     "@babel/core": "7.29.0",
@@ -277,7 +278,6 @@
     "http-server": "14.1.1",
     "https-proxy-agent": "7.0.6",
     "humanize-duration": "3.27.1",
-    "intl-tel-input": "24.7.0",
     "is-glob": "4.0.3",
     "js-yaml": "4.1.0",
     "json-to-ast": "2.1.0",
@@ -686,7 +686,8 @@
       "node_modules/@indutny/mac-screen-share/build/Release/*.node",
       "node_modules/fs-xattr/build/Release/*.node",
       "!node_modules/tar",
-      "sticker-creator/dist/**"
+      "sticker-creator/dist/**",
+      "node_modules/intl-tel-input/build/img/*.webp"
     ]
   },
   "volta": {

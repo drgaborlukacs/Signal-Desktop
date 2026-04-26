@@ -93,10 +93,6 @@ function openStandalone(): ThunkAction<
   OpenStandaloneActionType
 > {
   return dispatch => {
-    if (getEnvironment() === Environment.PackagedApp) {
-      return;
-    }
-
     window.IPC.addSetupMenuItems();
     dispatch({
       type: OPEN_STANDALONE,

@@ -414,7 +414,7 @@ export function ProfileNameStage({
         <button
           type="button"
           className="button"
-          disabled={Boolean(normalizeProfileName(firstName))}
+          disabled={!Boolean(normalizeProfileName(firstName))}
           onClick={onNextClick}
         >
           Finish
