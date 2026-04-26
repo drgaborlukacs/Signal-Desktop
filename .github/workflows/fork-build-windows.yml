@@ -1,0 +1,73 @@
+name: Fork Build (Windows)
+on:
+  push:
+    branches: ['*-standalone-registration']
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - run: git config --global core.autocrlf false
+      - run: git config --global core.eol lf
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'pnpm'
+          cache-dependency-path: 'pnpm-lock.yaml'
+
+      - name: Install Desktop node_modules
+        run: pnpm install
+        env:
+          NPM_CONFIG_LOGLEVEL: verbose
+
+      - run: copy package.json temp.json
+      - run: del package.json
+      - run: type temp.json | findstr /v certificateSubjectName | findstr /v certificateSha1 > package.json
+
+      - run: pnpm run prepare-beta-build
+      - run: pnpm run generate
+      - name: Create preload cache
+        run: pnpm run build:preload-cache
+        env:
+          ARTIFACTS_DIR: artifacts/win
+
+      - name: Build NSIS installer
+        run: pnpm run build:release --win nsis --publish=never
+        env:
+          DISABLE_INSPECT_FUSE: on
+
+      - name: Rename NSIS installer (avoid collision with portable target)
+        shell: pwsh
+        run: |
+          Get-ChildItem release\*.exe |
+            Rename-Item -NewName { $_.BaseName + '-installer' + $_.Extension }
+          Get-ChildItem release\*.exe.blockmap |
+            Rename-Item -NewName { $_.Name -replace '\.exe\.blockmap$', '-installer.exe.blockmap' }
+
+      - name: Build portable .exe from prepackaged dir
+        run: pnpm run build:release --win portable --prepackaged release/win-unpacked --publish=never
+        env:
+          DISABLE_INSPECT_FUSE: on
+
+      - name: Rename portable .exe
+        shell: pwsh
+        run: |
+          Get-ChildItem release\*.exe |
+            Where-Object { $_.Name -notlike '*-installer*' } |
+            Rename-Item -NewName { $_.BaseName + '-portable' + $_.Extension }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: signal-desktop-windows-installer
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest*.yml
+          if-no-files-found: error
