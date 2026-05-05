@@ -2,6 +2,10 @@ name: Fork Build (Windows)
 on:
   push:
     branches: ['*-standalone-registration']
+    paths-ignore:
+      - '.github/workflows/fork-build-slackware.yml'
+      - '.github/workflows/fork-build-linux.yml'
+      - '.github/slackware/**'
   workflow_dispatch:
 
 jobs:

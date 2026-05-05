@@ -1,0 +1,218 @@
+name: Fork Build (Slackware 15.0)
+on:
+  push:
+    branches: ['*-standalone-registration']
+    paths-ignore:
+      - '.github/workflows/fork-build-windows.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fork-build-slackware-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  slackware:
+    runs-on: ubuntu-latest
+    container:
+      image: aclemons/slackware:15.0
+    timeout-minutes: 90
+    env:
+      PRGNAM: signal-desktop-standalone_registration
+      BINNAME: signal-desktop-standalone-registration
+      BUILD: '1'
+      TAG: _GL
+      PKGTYPE: tgz
+      ARCH: x86_64
+      MAX_GLIBC: '2.33'
+      # Tell git/curl/openssl where the CA bundle lives. Slackware's
+      # ca-certificates package needs update-ca-certificates run first;
+      # install-build-tools.sh does that.
+      GIT_SSL_CAINFO: /etc/ssl/certs/ca-certificates.crt
+      CURL_CA_BUNDLE:  /etc/ssl/certs/ca-certificates.crt
+      SSL_CERT_FILE:   /etc/ssl/certs/ca-certificates.crt
+      SSL_CERT_DIR:    /etc/ssl/certs
+    steps:
+      # actions/checkout silently falls back to REST-API tarball mode when
+      # git is missing -- which doesn't preserve .git, breaking later steps
+      # that call `git show` (e.g. scripts/get-expire-time.mjs). Install git
+      # and its HTTPS transitive deps before checkout so it uses real git.
+      - name: Bootstrap (git + HTTPS deps so actions/checkout uses real git)
+        run: |
+          set -eux
+          sed -i \
+            -e 's/^CHECKGPG=.*/CHECKGPG=off/' \
+            -e 's/^BATCH=.*/BATCH=on/' \
+            -e 's/^DEFAULT_ANSWER=.*/DEFAULT_ANSWER=y/' \
+            /etc/slackpkg/slackpkg.conf
+          slackpkg -batch=on -default_answer=y update
+          slackpkg -batch=on -default_answer=y install \
+            git curl wget nghttp2 ca-certificates cyrus-sasl libssh2 brotli openssl perl
+          /usr/sbin/update-ca-certificates --fresh
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          path: Signal-Desktop
+
+      - name: Install Slackware build tools
+        run: bash Signal-Desktop/.github/slackware/install-build-tools.sh
+
+      - name: Read versions from repo
+        id: versions
+        run: |
+          set -eux
+          NODE_VERSION=$(tr -d '[:space:]v' < Signal-Desktop/.nvmrc)
+          PNPM_VERSION=$(sed -n 's/.*"packageManager": *"pnpm@\([^"]*\)".*/\1/p' Signal-Desktop/package.json)
+          APP_VERSION=$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' Signal-Desktop/package.json | head -1)
+          LIBSIGNAL_VERSION=$(grep '"@signalapp/libsignal-client"' Signal-Desktop/package.json | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          echo "node=$NODE_VERSION"           >> "$GITHUB_OUTPUT"
+          echo "pnpm=$PNPM_VERSION"           >> "$GITHUB_OUTPUT"
+          echo "VERSION=$APP_VERSION"         >> "$GITHUB_ENV"
+          echo "LIBSIGNAL_VERSION=$LIBSIGNAL_VERSION" >> "$GITHUB_ENV"
+
+      - name: Install Node.js
+        run: |
+          set -eux
+          NODE_VERSION='${{ steps.versions.outputs.node }}'
+          curl -fL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" -o /tmp/node.tar.xz
+          mkdir -p /opt/node
+          tar -xJf /tmp/node.tar.xz -C /opt/node --strip-components=1
+          echo "/opt/node/bin" >> "$GITHUB_PATH"
+
+      - name: Activate pnpm via corepack
+        run: |
+          set -eux
+          corepack enable
+          corepack prepare 'pnpm@${{ steps.versions.outputs.pnpm }}' --activate
+
+      - name: Install rustup (no default toolchain)
+        run: |
+          set -eux
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --no-modify-path --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install newer cmake (Slackware 15.0 ships 3.21; BoringSSL needs 3.22+)
+        run: |
+          set -eux
+          CMAKE_VERSION=3.30.5
+          curl -fL "https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-x86_64.tar.gz" -o /tmp/cmake.tar.gz
+          mkdir -p /opt/cmake
+          tar -xzf /tmp/cmake.tar.gz -C /opt/cmake --strip-components=1
+          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+
+      - name: Install protoc (not in Slackware 15.0 main repo)
+        run: |
+          set -eux
+          PROTOC_VERSION=25.3
+          curl -fL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" -o /tmp/protoc.zip
+          mkdir -p /opt/protoc
+          # Slackware lacks `unzip` by default; use python's stdlib zipfile.
+          python3 -m zipfile -e /tmp/protoc.zip /opt/protoc/
+          chmod +x /opt/protoc/bin/protoc
+          echo "/opt/protoc/bin" >> "$GITHUB_PATH"
+          echo "PROTOC=/opt/protoc/bin/protoc" >> "$GITHUB_ENV"
+
+      - name: Clone libsignal
+        run: |
+          set -eux
+          git clone --depth 1 --branch "v${LIBSIGNAL_VERSION}" \
+            https://github.com/signalapp/libsignal.git /tmp/libsignal
+          RUST_TOOLCHAIN=$(tr -d '[:space:]' < /tmp/libsignal/rust-toolchain)
+          echo "RUST_TOOLCHAIN=$RUST_TOOLCHAIN" >> "$GITHUB_ENV"
+
+      - name: Cache cargo registry
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-registry-slackware15-${{ env.LIBSIGNAL_VERSION }}-${{ env.RUST_TOOLCHAIN }}
+          restore-keys: |
+            cargo-registry-slackware15-
+
+      - name: Cache libsignal target dir + node build
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: |
+            /tmp/libsignal/target
+            /tmp/libsignal/node/build
+          key: libsignal-build-slackware15-${{ env.LIBSIGNAL_VERSION }}-${{ env.RUST_TOOLCHAIN }}
+
+      - name: Install pinned Rust toolchain
+        run: |
+          set -eux
+          rustup toolchain install "$RUST_TOOLCHAIN"
+          rustup default "$RUST_TOOLCHAIN"
+
+      - name: Build libsignal-client
+        working-directory: /tmp/libsignal
+        run: |
+          set -eux
+          cargo build --release
+          cd node
+          npm install
+          npm run build
+          ls -l build/Release/libsignal_client_linux_x64.node
+
+      - name: Cache pnpm store
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-slackware15-${{ hashFiles('Signal-Desktop/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-slackware15-
+
+      - name: Cache .electron-gyp
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5.0.4
+        with:
+          path: ~/.electron-gyp
+          key: electron-gyp-slackware15-${{ hashFiles('Signal-Desktop/pnpm-lock.yaml') }}
+
+      - name: Install Signal Desktop node_modules
+        working-directory: Signal-Desktop
+        env:
+          NPM_CONFIG_LOGLEVEL: warn
+        run: pnpm install --frozen-lockfile
+
+      - name: Patch libsignal prebuild with locally-built binary
+        working-directory: Signal-Desktop
+        run: |
+          set -eux
+          install -m 0644 /tmp/libsignal/node/build/Release/libsignal_client_linux_x64.node \
+            node_modules/@signalapp/libsignal-client/prebuilds/linux-x64/@signalapp+libsignal-client.node
+
+      - name: Build Signal Desktop (linux dir)
+        working-directory: Signal-Desktop
+        env:
+          DISABLE_INSPECT_FUSE: 'on'
+        run: |
+          set -eux
+          pnpm run generate
+          pnpm run build:release --linux dir
+
+      - name: Verify glibc requirement of bundled signal-desktop
+        run: |
+          set -eux
+          BIN=Signal-Desktop/release/linux-unpacked/signal-desktop
+          highest=$(objdump -T "$BIN" 2>/dev/null \
+            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
+            | sort -V -u | tail -1 | sed 's/GLIBC_//')
+          echo "Highest GLIBC_ symbol referenced: $highest (max allowed: ${MAX_GLIBC})"
+          if [ "$(printf '%s\n' "$highest" "$MAX_GLIBC" | sort -V | tail -1)" != "$MAX_GLIBC" ]; then
+            echo "::error::signal-desktop requires GLIBC_${highest} but Slackware 15.0 caps at ${MAX_GLIBC}"
+            exit 1
+          fi
+
+      - name: Build Slackware package
+        env:
+          SRC_DIR: ${{ github.workspace }}/Signal-Desktop
+          RELEASE_DIR: ${{ github.workspace }}/Signal-Desktop/release/linux-unpacked
+          OUT_DIR: /tmp/output
+        run: bash Signal-Desktop/.github/slackware/build-package.sh
+
+      - name: Upload Slackware package
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.PRGNAM }}-${{ env.VERSION }}-${{ env.ARCH }}-${{ env.BUILD }}${{ env.TAG }}
+          path: /tmp/output/*.tgz
+          if-no-files-found: error

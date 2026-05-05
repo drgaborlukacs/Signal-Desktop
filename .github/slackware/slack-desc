@@ -1,0 +1,19 @@
+# HOW TO EDIT THIS FILE:
+# The "handy ruler" below makes it easier to edit a package description.
+# Line up the first '|' above the ':' following the base package name, and
+# the '|' on the right side marks the last column you can put a character in.
+# You must make exactly 11 lines for the formatting to be correct.  It's also
+# customary to leave one space after the ':' except on otherwise blank lines.
+
+              |-----handy-ruler------------------------------------------------------|
+signal-desktop-standalone_registration: signal-desktop-standalone_registration (Signal for Desktop)
+signal-desktop-standalone_registration:
+signal-desktop-standalone_registration: Signal is an encrypted instant messaging and voice calling
+signal-desktop-standalone_registration: application for Android, iOS, and the desktop. It uses the Internet
+signal-desktop-standalone_registration: to send one-to-one and group messages, which can include images
+signal-desktop-standalone_registration: and video messages, and make one-to-one voice/video calls.
+signal-desktop-standalone_registration:
+signal-desktop-standalone_registration: This is a locally compiled version for systems with glibc 2.33
+signal-desktop-standalone_registration: (e.g., Slackware 15.0). The official Signal .deb/.rpm binaries
+signal-desktop-standalone_registration: require glibc 2.34+, so this package builds from source.
+signal-desktop-standalone_registration:
